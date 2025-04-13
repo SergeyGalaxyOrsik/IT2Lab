@@ -1,3 +1,4 @@
+
 package org.sergeyorsik.streamcipherapp;
 
 import javafx.application.Application;
@@ -69,8 +70,10 @@ public class StreamCipherApp extends Application {
             filtered = filtered.substring(0, LFSR_SIZE);
         }
         registerInput.setText(filtered);
-        encryptButton.setDisable(filtered.length() != LFSR_SIZE || originalFileOutput.getText().isEmpty() || selectedFile == null);
-        decryptButton.setDisable(filtered.length() != LFSR_SIZE || originalFileOutput.getText().isEmpty() || selectedFile == null);
+        System.out.println(!originalFileOutput.getText().isEmpty());
+        System.out.println(filtered.length() != LFSR_SIZE || (originalFileOutput.getText().isEmpty()));
+        encryptButton.setDisable(filtered.length() != LFSR_SIZE || originalFileOutput.getText().isEmpty());
+        decryptButton.setDisable(filtered.length() != LFSR_SIZE || originalFileOutput.getText().isEmpty());
     }
 
     private void selectFile(Stage stage) throws IOException {
@@ -93,7 +96,7 @@ public class StreamCipherApp extends Application {
         try {
             if(originalFileOutput.getText().isEmpty()) {
                 byte[] fileBytes = Files.readAllBytes(selectedFile.toPath());
-                byte[] key = LFSR.generateKey(registerInput.getText(), fileBytes.length); // исправление здесь
+                byte[] key = LFSR.generateKey(registerInput.getText(), fileBytes.length); // Генерация ключа
                 byte[] result = xorBytes(fileBytes, key);
 
                 keyOutput.setText(formatBinaryString(bytesToBinaryString(key)));
@@ -117,11 +120,11 @@ public class StreamCipherApp extends Application {
                 originalFileOutput.setText(formatBinaryString(binaryInput));
                 encryptedFileOutput.setText(formatBinaryString(bytesToBinaryString(result)));
 
-                File outputFile = new File(selectedFile.getParent(), (encrypt ? "encrypted" : "decrypted") + "_" + selectedFile.getName());
-                Files.write(outputFile.toPath(), result);
+//                File outputFile = new File(selectedFile.getParent(), (encrypt ? "encrypted" : "decrypted") + "_" + selectedFile.getName());
+//                Files.write(outputFile.toPath(), result);
 
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Файл сохранен: " + outputFile.getAbsolutePath());
-                alert.show();
+//                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Файл сохранен: " + outputFile.getAbsolutePath());
+//                alert.show();
             }
 
         } catch (IOException e) {
@@ -130,33 +133,54 @@ public class StreamCipherApp extends Application {
     }
 
     private byte[] binaryStringToByteArray(String binaryString) {
-        int len = binaryString.length();
-        byte[] byteArray = new byte[(len + 7) / 8];
-        for (int i = 0; i < len; i += 8) {
-            byte b = 0;
-            for (int j = 0; j < 8 && (i + j) < len; j++) {
-                b |= (binaryString.charAt(i + j) - '0') << (7 - j);
+        int byteCount = (binaryString.length() + 7) / 8; // Вычисляем количество байтов
+        byte[] result = new byte[byteCount];
+
+        for (int i = 0; i < binaryString.length(); i++) {
+            int byteIndex = i / 8; // Определяем, в какой байт пишем
+            int bitIndex = 7 - (i % 8); // Позиция бита внутри байта
+            if (binaryString.charAt(i) == '1') {
+                result[byteIndex] |= (1 << bitIndex); // Устанавливаем соответствующий бит
             }
-            byteArray[i / 8] = b;
         }
-        return byteArray;
+
+        return result;
     }
 
     private byte[] xorBytes(byte[] data, byte[] key) {
         int minLength = Math.min(data.length, key.length);
         byte[] result = new byte[data.length];
         for (int i = 0; i < minLength; i++) {
+            System.out.println("File data: " + byteToBinaryString(data[i]));
+            System.out.println("Key data: "+byteToBinaryString(key[i]));
             result[i] = (byte) (data[i] ^ key[i]);
+            System.out.println("Result: "+byteToBinaryString(result[i]));
         }
         return result;
+    }
+    private String byteToBinaryString(byte b) {
+        StringBuilder sb = new StringBuilder();
+
+
+            for (int i = 7; i >= 0; i--) {
+                boolean bit = (b & (1 << i)) != 0;
+                sb.append(bit ? '1' : '0');
+            }
+
+        return sb.length() == 0 ? "0" : sb.toString();
     }
 
     private String bytesToBinaryString(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
+
         for (byte b : bytes) {
-            sb.append(String.format("%8s", Integer.toBinaryString(b & 0xFF)).replace(' ', '0'));
+            for (int i = 7; i >= 0; i--) {
+                boolean bit = (b & (1 << i)) != 0;
+                sb.append(bit ? '1' : '0');
+
+            }
         }
-        return sb.toString();
+        return sb.length() == 0 ? "0" : sb.toString();
     }
 
     private String formatBinaryString(String binary) {
@@ -190,25 +214,30 @@ class LFSR {
             register[i] = seed.charAt(i) == '1';
         }
 
-        for (int i = 0; i < length; i++) {
-            key[i] = (byte) (register[0] ? 1 : 0);
+        StringBuilder keyBits = new StringBuilder();
 
-            System.out.print("Step " + (i + 1) + ": ");
-            for (boolean bit : register) {
-                System.out.print(bit ? "1" : "0");
-            }
-            System.out.println();
+        System.out.println("Length: " + length);
+        System.out.println("Length*8: " + length*8);
 
-            boolean newBit = false;
-            for (int tap : TAPS) {
-                newBit ^= register[tap - 1];
-            }
+        for (int i = 0; i < length * 8; i++) { // генерируем бит за битом для ключа
+            keyBits.append(register[0] ? '1' : '0');
+            boolean newBit = register[0] ^ register[20];
+//            for (int tap : TAPS) {111111111111111
+//                newBit ^= register[tap - 1];
+//            }
 
             System.arraycopy(register, 1, register, 0, register.length - 1);
             register[register.length - 1] = newBit;
         }
 
-        System.out.println("Generated Key: " + Arrays.toString(key));
+        // Преобразуем полученные биты в байты
+        for (int i = 0; i < length; i++) {
+            int byteStart = i * 8;
+            int byteValue = Integer.parseInt(keyBits.substring(byteStart, byteStart + 8), 2);
+            System.out.println("Key: " + keyBits.substring(byteStart, byteStart + 8));
+            key[i] = (byte) byteValue;
+        }
+        System.out.println(Arrays.toString(key));
 
         return key;
     }
